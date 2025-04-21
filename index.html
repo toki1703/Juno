@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="data-app-version" content="25.04.18.110">
+    <meta name="data-app-time" content="2025/04/18 16:09:39">
+    <link rel="manifest" href="manifest.json?25.04.18.110">
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+    <title>授ノート</title>
+    <style>
+        body {
+            min-height: 100vh;
+            /* mobile viewport bug fix */
+            min-height: -webkit-fill-available;
+        }
+
+        html {
+            height: -webkit-fill-available;
+        }
+
+        /* トースト通知のスタイル */
+        .toast {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #444;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+            z-index: 999;
+            width: 85%;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6f9;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            color: #333;
+            margin-bottom: 1em;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            position: fixed;
+            top: 85px;
+            height: 35px;
+            left: 0;
+        }
+
+        .tabs button {
+            background: #e4e7eb;
+            border: none;
+            border-radius: 0;
+            font-size: 16px;
+            height:35px;
+            color: #555;
+            cursor: pointer;
+            width: 50%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .tabs button.active {
+            background: #4f9ef2;
+            color: white;
+        }
+
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 1em;
+            width: 100%;
+            position: fixed;
+            top: 5px;
+            left: 0;
+        }
+
+        .filter-select,
+        button,
+        input[type="date"] {
+            padding: 10px 16px;
+            font-size: 1rem;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .filter-select {
+            width: 220px;
+        }
+
+        button {
+            background-color: #4f9ef2;
+            color: white;
+            font-weight: bold;
+            border: none;
+        }
+
+        button:disabled {
+            background-color: #ddd;
+            cursor: not-allowed;
+        }
+
+        /* トグルスイッチ */
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            transform: translate(-20%, -70%);
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-switch-label {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #ccc;
+            border-radius: 50px;
+            position: absolute;
+            transition: background-color 0.3s;
+        }
+
+        .toggle-switch-label:before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch input:checked+.toggle-switch-label {
+            background-color: #4f9ef2;
+        }
+
+        .toggle-switch input:checked+.toggle-switch-label:before {
+            transform: translateX(26px);
+        }
+
+        #log {
+            white-space: pre-wrap;
+            background: #fff;
+            padding: 1.5em;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            width: 100%;
+            height: 80%;
+            overflow-y: scroll;
+            font-size: 1rem;
+            color: #333;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+        }
+
+        #share-btn {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+    <!-- <h3>青森大学 授業録</h3> -->
+    <div class="controls">
+        <!-- 日付選択フィールド -->
+        <input type="date" id="date-picker" value="" />
+
+        <select id="time-filter" class="filter-select">
+            <option value="all">すべての時間</option>
+            <option value="1">9:00~10:30</option>
+            <option value="2">10:40~12:10</option>
+            <option value="3">13:00~14:30</option>
+            <option value="4">14:40~16:10</option>
+            <option value="5">16:20~17:50</option>
+        </select>
+    </div>
+
+    <div class="controls"
+        style="position: fixed;top:52px;left: 0;font-size: 14px;gap: 4px;">
+        自動更新<output id="ago"></output>:　
+        <label for="auto-toggle" class="toggle-switch" style="zoom: 0.7;">
+            <input type="checkbox" id="auto-toggle" checked>
+            <span class="toggle-switch-label"></span>
+        </label>
+        <button id="manual-refresh" style="zoom: 0.7;">今すぐ更新</button>
+
+    </div>
+    <div class="tabs">
+        <button id="tab-transcript" class="active">文字起こし</button>
+        <button id="tab-summary">要約</button>
+    </div>
+    <div id="log">読み込み中...</div>
+
+    <script type="module">
+        let version;
+        const latex = `ん…ひつじが1匹、ひつじが2匹…
+
+ひつじが \sum_{n=1}^{\infty} ｎ 匹…
+\sum_{n=1}^{\infty} n = \infty`;
+        let sleep = "データが見つかりません。";
+        let isFirst = true;
+        const log = document.getElementById("log");
+        const tabTranscript = document.getElementById("tab-transcript");
+        const tabSummary = document.getElementById("tab-summary");
+        const timeFilter = document.getElementById("time-filter");
+        const autoToggle = document.getElementById("auto-toggle");
+        const autoStatus = document.getElementById("auto-status");
+        const manualRefresh = document.getElementById("manual-refresh");
+        const datePicker = document.getElementById("date-picker");
+
+        let currentTab = "transcript";
+        let autoUpdate = true;
+        let intervalId;
+        // 日付の初期設定（今日・日本時間）
+        function setTodayDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0'); // 月は0始まり
+            const day = String(now.getDate()).padStart(2, '0');
+            datePicker.value = `${year}-${month}-${day}`;
+
+        }
+
+        // 時間帯の抽出関数
+        function getTimeSlot(startTimeStr) {
+            const date = new Date(startTimeStr.replace(" ", "T"));
+            const time = date.getHours() * 60 + date.getMinutes();
+
+            if (time >= 540 && time <= 630) return 1;
+            if (time >= 640 && time <= 730) return 2;
+            if (time >= 780 && time <= 870) return 3;
+            if (time >= 880 && time <= 970) return 4;
+            if (time >= 980 && time <= 1070) return 5;
+            return 0;
+        }
+
+        function getTimeDifference(dateString) {
+            // 入力形式をDateが扱える形式に変換（"T"を追加）
+            const formattedDate = dateString.replace(' ', 'T');
+            const inputDate = new Date(formattedDate);
+            const now = new Date();
+
+            // 差分（ミリ秒単位）
+            const diffMs = now - inputDate;
+
+            // 差分を秒・分・時・日単位で返す（必要に応じて）
+            const diffInSeconds = Math.floor(diffMs / 1000);
+            if (diffInSeconds < 60) {
+                return `${diffInSeconds}秒`;
+            } else if (diffInSeconds < 3600) {
+                const minutes = Math.floor(diffInSeconds / 60);
+                const seconds = Math.floor(diffInSeconds % 60);
+                return seconds === 0 ? `${minutes}分` : `${minutes}分${seconds}秒`;
+            } else if (diffInSeconds < 86400) {
+                const hours = Math.floor(diffInSeconds / 3600);
+                const minutes = Math.floor((diffInSeconds % 3600) / 60);
+                return minutes === 0 ? `約${hours}時間` : `約${hours}時間${minutes}分`;
+            } else {
+                const days = Math.floor(diffInSeconds / 86400);
+                return `約${days}日`;
+            }
+        }
+
+        // 文字起こしの取得と表示
+        function fetchAndDisplay() {
+            const selectedDate = datePicker.value;
+            const selectedTime = timeFilter.value;
+            let url = "https://toki-system.dorper-royal.ts.net/get_transcriptions.php";
+
+            if (selectedDate !== "") {
+                let from = `${selectedDate} 00:00:00`;
+                let to = `${selectedDate} 23:59:59`;
+
+                // 時間帯指定がある場合は、時間も上書き
+                if (selectedTime !== "all") {
+                    const timeRanges = {
+                        "1": ["09:00:00", "10:30:00"],
+                        "2": ["10:40:00", "12:10:00"],
+                        "3": ["13:00:00", "14:30:00"],
+                        "4": ["14:40:00", "16:10:00"],
+                        "5": ["16:20:00", "17:50:00"]
+                    };
+
+                    if (timeRanges[selectedTime]) {
+                        from = `${selectedDate} ${timeRanges[selectedTime][0]}`;
+                        to = `${selectedDate} ${timeRanges[selectedTime][1]}`;
+                    }
+                }
+
+                const params = new URLSearchParams({ from, to });
+                url += `?${params.toString()}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(resjson => {
+                    let data = resjson.transcriptions;
+                    version = resjson.version;
+                    const currentVersion = document.querySelector('meta[name="data-app-version"]').getAttribute('content');
+                    if (currentVersion !== version) {
+                        showToast("<h3>新しいバージョンが利用できます。</h3><h5>タップして続ける</h5>", false);
+                    }
+                    if (currentTab == "transcript") {
+                        log.innerHTML = sleep;
+
+                        const filtered = data.filter(entry => {
+
+                            const entryDate = entry.start_time.split(" ")[0]; // 日付部分を取り出す
+                            const slot = getTimeSlot(entry.start_time);
+
+                            return (selectedDate === "" || entryDate === selectedDate) &&
+                                (timeFilter.value === "all" || timeFilter.value == slot);
+                        });
+                        if (filtered.length > 0) {
+                            log.textContent = "";
+
+                        }
+                        if (autoToggle.checked) {
+                            document.getElementById("ago").innerHTML = getTimeDifference(filtered[0].end_time) + " 前に更新済み";
+                        } else {
+                            document.getElementById("ago").innerHTML = "";
+                        }
+                        isFirst = false;
+                        filtered.reverse().forEach(entry => {
+
+                            log.textContent += `${entry.text}\n`;
+                        });
+                        log.scrollTop = log.scrollHeight;
+                    }
+
+                });
+        }
+
+        // タブ切り替え
+        tabTranscript.addEventListener("click", () => {
+            currentTab = "transcript";
+            tabTranscript.classList.add("active");
+            tabSummary.classList.remove("active");
+            fetchAndDisplay();
+        });
+
+        tabSummary.addEventListener("click", async () => {
+            if (currentTab == "summary") {
+                return;
+            }
+            currentTab = "summary";
+            tabSummary.classList.add("active");
+            tabTranscript.classList.remove("active");
+            // fetchAndDisplay();
+            // chatgpt(log.textContent);
+            if (log.textContent == "要約を生成しています...") {
+                return;
+            }
+            if (log.textContent == "" || log.textContent == sleep) {
+                log.innerHTML == sleep;
+                return;
+            }
+            await gemini2();
+            // alert("gpt");
+        });
+
+        // 時間帯フィルタの変更
+        timeFilter.addEventListener("change", fetchAndDisplay);
+
+        // 日付選択の変更
+        datePicker.addEventListener("change", fetchAndDisplay);
+
+        // 自動更新のトグル
+        autoToggle.addEventListener("change", () => {
+            autoUpdate = autoToggle.checked;
+            // autoStatus.textContent = `自動更新: ${autoUpdate ? "ON" : "OFF"}`;
+
+            if (autoUpdate) {
+                intervalId = setInterval(fetchAndDisplay, 1000);
+            } else {
+                clearInterval(intervalId);
+            }
+        });
+
+        // 手動更新ボタン
+        manualRefresh.addEventListener("click", fetchAndDisplay);
+
+        setTodayDate();
+        fetchAndDisplay();
+        intervalId = setInterval(fetchAndDisplay, 2500);
+
+        import { GoogleGenAI } from 'https://cdn.jsdelivr.net/npm/@google/genai@latest/+esm'
+
+        const ai = new GoogleGenAI({ apiKey: "AIzaSyD5qAbLzB69ItGbsO8VaDwUe7fn2Y-pzBQ" });
+
+
+        async function gemini2() {
+            let input = log.textContent;
+            log.textContent = "要約を生成しています...";
+
+            const prompt = input.replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '').replace(/ご視聴ありがとうございました/g, "").replace(/。/g, "").replace(/、/g, "").replace(/\n\n/g, "");
+
+            console.log(prompt); // "これはテスト"
+            const cleaned = input
+
+                //　かっこを除去 
+                .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '')
+
+                // 無音に対する認識結果を除去
+                .replace(/ご視聴ありがとうございました/g, "")
+
+                // 空白＋記号の調整（例：「！ 」→「！」）
+                .replace(/([！？])\s+/g, '$1')
+
+                // 不要なフィラー（えー、あのー 等）の削除
+                .replace(/(えーと|えっと|あのー|あの|まー|そのー|その)/g, '')
+
+                // 文末の誤字（ますん→ません）
+                .replace(/ますん/g, 'ません')
+                .replace(/でしたす/g, 'でした')
+
+                // 半角全角英数字の統一（ここは必要に応じて）
+                // .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+
+                // 片方だけのかっこ除去
+                // .replace(/[（【「『〔［｛〈《]/g, '')
+                // .replace(/[）】」』〕］｝〉》]/g, '')
+
+                // 長すぎるひらがな語（5文字以上連続）
+                // .replace(/[ぁ-ゖ]{5,}/g, '')
+
+                // 句読点と改行削除
+                .replace(/[。、]/g, '')
+                .replace(/\n/g, '')
+
+                // 半角はてなを除去
+                .replace(/\?/g, '');
+
+            // log.innerHTML = cleaned;
+            // return;
+            const response = await ai.models.generateContentStream({
+                model: "gemini-2.0-flash",
+                contents: "以下のテキストは大学の講義内容を音声認識したものです。\n雑談など関係のないものを除去して、議題部分を誤認識を修正して、セクションごとに構造化してください。\n\n" + cleaned,
+            });
+            log.textContent = "";
+            let sum = "";
+            for await (const chunk of response) {
+                console.log(chunk.text);
+                sum += chunk.text;
+                log.innerHTML = marked.parse(sum);
+                log.scrollTop = log.scrollHeight;
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js?timestamp=' + new Date().getTime()).then(function (registration) {
+                console.log('ServiceWorkerの登録に成功しました。スコープ: ', registration.scope);
+                document.getElementById('toast').addEventListener('click', function (params) {
+                    registration.update().then(() => {
+                        console.log('ServiceWorkerが更新されました。ページをリロードします...');
+                        location.reload();
+                    }).catch(err => {
+                        console.log('ServiceWorkerの更新に失敗しました: ', err);
+                    });
+                });
+
+                fetch('version.json?timestamp=' + new Date().getTime(), {
+                    cache: 'no-store'
+                })
+                    .then(response => response.json())
+                    .then(async data => {
+
+                        const currentVersion = document.querySelector('meta[name="data-app-version"]').getAttribute('content');
+                        const newVersion = data.version;
+                        const currentTime = document.querySelector('meta[name="data-app-time"]').getAttribute('content');
+                        const newTime = data.time;
+
+                        if (currentVersion !== newVersion) {
+                            showToast("新しいバージョンが利用できます。更新します。", false);
+                            console.log('新しいバージョンが検出されました。キャッシュを更新します...');
+                            registration.update().then(() => {
+                                console.log('ServiceWorkerが更新されました。ページをリロードします...');
+                                location.reload();
+                            }).catch(err => {
+                                console.log('ServiceWorkerの更新に失敗しました: ', err);
+                            });
+
+                        } else {
+                            // showToast(`Ver ${currentVersion}`,true);
+                        }
+                    })
+                    .catch(err => {
+                        console.log('version.jsonの取得に失敗しました: ', err);
+                    });
+            }).catch(function (err) {
+                console.log('ServiceWorkerの登録に失敗しました: ', err);
+            });
+        }
+        const toastElement = document.getElementById('toast');
+        let lastToasted;
+        function showToast(message, isClose = true) {
+            if (isClose) {
+                lastToasted = new Date().getTime() / 1000;
+            }
+            if (message == "") {
+                toastElement.classList.remove('show');
+                return;
+            }
+            toastElement.innerHTML = message;
+            toastElement.classList.add('show');
+        }
+        setInterval(() => {
+            const nowd = new Date().getTime() / 1000;
+            if ((nowd - lastToasted) >= 1.4) {
+                toastElement.classList.remove('show');
+            }
+        }, 45);
+
+    </script>
+
+    <div class="toast" id="toast"></div>
+
+</body>
+
+</html>
